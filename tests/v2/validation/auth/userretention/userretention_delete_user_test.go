@@ -34,6 +34,9 @@ func (ur *URDeleteTestSuite) SetupSuite() {
 	client, err := rancher.NewClient("", ur.session)
 	require.NoError(ur.T(), err)
 	ur.client = client
+
+	err = updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, "0")
+	require.NoError(ur.T(), err)
 }
 
 func (ur *URDeleteTestSuite) TearDownSuite() {

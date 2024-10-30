@@ -18,8 +18,10 @@ import (
 
 type UserRetentionSettingsTestSuite struct {
 	suite.Suite
-	client  *rancher.Client
-	session *session.Session
+	client        *rancher.Client
+	session       *session.Session
+	originalTTL   string
+	settingsReset bool
 }
 
 func (ur *UserRetentionSettingsTestSuite) SetupSuite() {
@@ -27,6 +29,9 @@ func (ur *UserRetentionSettingsTestSuite) SetupSuite() {
 	client, err := rancher.NewClient("", ur.session)
 	require.NoError(ur.T(), err)
 	ur.client = client
+
+	err = updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, "0")
+	require.NoError(ur.T(), err)
 }
 
 func (ur *UserRetentionSettingsTestSuite) TearDownSuite() {
@@ -111,6 +116,10 @@ func (ur *UserRetentionSettingsTestSuite) validateSettingsNotUpdated(settingName
 }
 
 func (ur *UserRetentionSettingsTestSuite) TestUpdateSettingsForDisableInactiveUserAfterWithPositiveInputValues() {
+
+	err := updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, "1")
+	require.NoError(ur.T(), err)
+
 	tests := []struct {
 		name        string
 		value       string
@@ -120,7 +129,7 @@ func (ur *UserRetentionSettingsTestSuite) TestUpdateSettingsForDisableInactiveUs
 		{"DisableAfterUpdatedZeroSeconds", "0s", "Users will be deactivated after 0s"},
 		{"DisableAfterUpdatedZeroMinutes", "0m", "Users will be deactivated after 0m"},
 		{"DisableAfterUpdatedZeroHours", "0h", "Users will be deactivated after 0h"},
-		{"DisableAfterUpdatedTenSeconds", "10s", "Users will be deactivated after 10s"},
+		{"DisableAfterUpdatedTenSeconds", "60s", "Users will be deactivated after 60s"},
 		{"DisableAfterUpdatedTenMinutes", "10m", "Users will be deactivated after 10m"},
 		{"DisableAfterUpdatedTwentyHours", "20h", "Users will be deactivated after 20h"},
 		{"DisableAfterUpdatedTenThousandSeconds", "10000s", "Users will be deactivated after 10000s"},
@@ -131,6 +140,9 @@ func (ur *UserRetentionSettingsTestSuite) TestUpdateSettingsForDisableInactiveUs
 }
 
 func (ur *UserRetentionSettingsTestSuite) TestUpdateSettingsForDisableInactiveUserAfterWithNegativeInputValues() {
+	err := updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, "1")
+	require.NoError(ur.T(), err)
+
 	tests := []struct {
 		name        string
 		value       string
@@ -144,7 +156,7 @@ func (ur *UserRetentionSettingsTestSuite) TestUpdateSettingsForDisableInactiveUs
 		{"DisableAfterUpdateErrorInvalidUnitMin", "10min", "Invalid value: \"10min\": time: unknown unit \"min\" in duration \"10min\""},
 		{"DisableAfterUpdateErrorInvalidUnitHour", "20hour", "Invalid value: \"20hour\": time: unknown unit \"hour\" in duration \"20hour\""},
 		{"DisableAfterUpdateErrorInvalidUnitDay", "1d", "Invalid value: \"1d\": time: unknown unit \"d\" in duration \"1d\""},
-		{"DisableAfterUpdateErrorNegativeDuration", "-20m", "Invalid value: \"-20m\": negative duration"},
+		{"DisableAfterUpdateErrorNegativeDuration", "-20m", "Invalid value: \"-20m\": negative value"},
 		{"DisableAfterUpdateErrorInvalidDuration", "tens", "Invalid value: \"tens\": time: invalid duration \"tens\""},
 	}
 	ur.testNegativeInputValues(disableInactiveUserAfter, tests)
@@ -171,17 +183,17 @@ func (ur *UserRetentionSettingsTestSuite) TestUpdateSettingsForDeleteInactiveUse
 		description string
 	}{
 		{"DeleteErrorMissingUnit", "10", "Invalid value: \"10\": time: missing unit in duration \"10\""},
-		{"DeleteErrorTooShortSeconds", "10s", "Invalid value: \"10s\": must be at least 336h0m0s"},
-		{"DeleteErrorTooShortMinutes", "10m", "Invalid value: \"10m\": must be at least 336h0m0s"},
-		{"DeleteErrorTooShortHours", "10h", "Invalid value: \"10h\": must be at least 336h0m0s"},
-		{"DeleteErrorInvalidUnitS", "10S", "Invalid value: \"10S\": time: unknown unit \"S\" in duration \"10S\""},
-		{"DeleteErrorInvalidUnitM", "10M", "Invalid value: \"10M\": time: unknown unit \"M\" in duration \"10M\""},
-		{"DeleteErrorInvalidUnitH", "10H", "Invalid value: \"10H\": time: unknown unit \"H\" in duration \"10H\""},
-		{"DeleteErrorInvalidUnitSec", "10sec", "Invalid value: \"10sec\": time: unknown unit \"sec\" in duration \"10sec\""},
-		{"DeleteErrorInvalidUnitMin", "10min", "Invalid value: \"10min\": time: unknown unit \"min\" in duration \"10min\""},
-		{"DeleteErrorInvalidUnitHour", "20hour", "Invalid value: \"20hour\": time: unknown unit \"hour\" in duration \"20hour\""},
-		{"DeleteErrorInvalidUnitDay", "1d", "Invalid value: \"1d\": time: unknown unit \"d\" in duration \"1d\""},
-		{"DeleteErrorNegativeDuration", "-20m", "Invalid value: \"-20m\": negative duration"},
+		{"DeleteErrorTooShortSeconds", "10s", "Forbidden: must be at least 336h0m0s"},
+		{"DeleteErrorTooShortMinutes", "10m", "Forbidden: must be at least 336h0m0s"},
+		{"DeleteErrorTooShortHours", "10h", "Forbidden: must be at least 336h0m0s"},
+		{"DeleteErrorInvalidUnitS", "10S", "time: unknown unit"},
+		{"DeleteErrorInvalidUnitM", "10M", "time: unknown unit"},
+		{"DeleteErrorInvalidUnitH", "10H", "time: unknown unit"},
+		{"DeleteErrorInvalidUnitSec", "10sec", "time: unknown unit"},
+		{"DeleteErrorInvalidUnitMin", "10min", "time: unknown unit"},
+		{"DeleteErrorInvalidUnitHour", "20hour", "time: unknown unit"},
+		{"DeleteErrorInvalidUnitDay", "1d", "time: unknown unit"},
+		{"DeleteErrorNegativeDuration", "-20m", "negative value"},
 	}
 	ur.testNegativeInputValues(deleteInactiveUserAfter, tests)
 }
@@ -222,6 +234,111 @@ func (ur *UserRetentionSettingsTestSuite) TestUpdateSettingsForUserRetentionCron
 		{"CronUpdateErrorInvalidNegative", "-20m", "Invalid value: \"-20m\": Expected exactly 5 fields, found 1: -20m"},
 	}
 	ur.testNegativeInputValues(userRetentionCron, tests)
+}
+
+func (ur *UserRetentionSettingsTestSuite) TestUpdateSettingsForAuthUserSessionTTLWithPositiveInputValues() {
+
+	err := setupUserRetentionSettings(ur.client, "1600h", "1600h", "*/1 * * * *", "false")
+	require.NoError(ur.T(), err)
+
+	tests := []struct {
+		name        string
+		value       string
+		description string
+	}{
+		{"TTLUpdatedMin", "1", "Minimum 1 minute session"},
+		{"TTLUpdatedHour", "60", "One hour session"},
+		{"TTLUpdatedDay", "1440", "24 hour session"},
+		{"TTLUpdatedWeek", "10080", "One week session"},
+	}
+	ur.testPositiveInputValues(authUserSessionTTLMinutes, tests)
+}
+
+func (ur *UserRetentionSettingsTestSuite) TestUpdateSettingsForAuthUserSessionTTLWithNegativeInputValues() {
+	tests := []struct {
+		name        string
+		value       string
+		description string
+	}{
+		{"TTLErrorNegative", "-10", "negative value"},
+		{"TTLErrorNonNumeric", "abc", "strconv.ParseInt: parsing \"abc\": invalid syntax"},
+		{"TTLErrorDecimal", "10.5", "strconv.ParseInt: parsing \"10.5\": invalid syntax"},
+		{"TTLErrorSpecialChars", "10@20", "strconv.ParseInt: parsing \"10@20\": invalid syntax"},
+	}
+	ur.testNegativeInputValues(authUserSessionTTLMinutes, tests)
+}
+
+func (ur *UserRetentionSettingsTestSuite) TestDisableInactiveUserLessThanTTL() {
+	err := setupUserRetentionSettings(ur.client, "1600m", "1600h", "*/1 * * * *", "false")
+	require.NoError(ur.T(), err)
+
+	err = updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, "1600")
+	require.NoError(ur.T(), err)
+
+	tests := []struct {
+		name        string
+		value       string
+		description string
+	}{
+		{"DisableLessThanTTL30m", "30m", "Forbidden: can't be less than auth-user-session-ttl-minutes"},
+		{"DisableLessThanTTL599m", "599m", "Forbidden: can't be less than auth-user-session-ttl-minutes"},
+		{"DisableLessThanTTL1h", "1h", "Forbidden: can't be less than auth-user-session-ttl-minutes"},
+	}
+	ur.testNegativeInputValues(disableInactiveUserAfter, tests)
+
+	err = updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, testTTLValue)
+	require.NoError(ur.T(), err)
+}
+
+func (ur *UserRetentionSettingsTestSuite) TestDeleteInactiveUserLessThanTTL() {
+	err := setupUserRetentionSettings(ur.client, "21600m", "1600h", "*/1 * * * *", "false")
+	require.NoError(ur.T(), err)
+
+	err = updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, "21600")
+	require.NoError(ur.T(), err)
+
+	tests := []struct {
+		name        string
+		value       string
+		description string
+	}{
+		{"DeleteLessThanTTL4h", "338h", "Forbidden: can't be less than auth-user-session-ttl-minutes"},
+		{"DeleteLessThanTTL359m", "359h", "Forbidden: can't be less than auth-user-session-ttl-minutes"},
+		{"DeleteLessThanTTL5h", "5h", "Forbidden: must be at least 336h0m0s"},
+	}
+	ur.testNegativeInputValues(deleteInactiveUserAfter, tests)
+
+	err = updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, testTTLValue)
+	require.NoError(ur.T(), err)
+}
+
+func (ur *UserRetentionSettingsTestSuite) TestInactiveUserSettingsGreaterThanTTL() {
+	err := updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, "60")
+	require.NoError(ur.T(), err)
+
+	tests := []struct {
+		name        string
+		value       string
+		description string
+	}{
+		{"ValidDisableAfter2h", "2h", "Valid value greater than TTL"},
+		{"ValidDisableAfter61m", "61m", "Valid value greater than TTL"},
+		{"ValidDisableAfter3600s", "3600s", "Valid value greater than TTL"},
+	}
+	ur.testPositiveInputValues(disableInactiveUserAfter, tests)
+
+	deleteTests := []struct {
+		name        string
+		value       string
+		description string
+	}{
+		{"ValidDeleteAfter337h", "337h", "Valid value greater than minimum and TTL"},
+		{"ValidDeleteAfter20160m", "20160m", "Valid value greater than minimum and TTL"},
+	}
+	ur.testPositiveInputValues(deleteInactiveUserAfter, deleteTests)
+
+	err = updateUserRetentionSettings(ur.client, authUserSessionTTLMinutes, testTTLValue)
+	require.NoError(ur.T(), err)
 }
 
 func TestUserRetentionSettingsSuite(t *testing.T) {
