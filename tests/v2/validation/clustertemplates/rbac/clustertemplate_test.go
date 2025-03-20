@@ -1,3 +1,5 @@
+//go:build (validation || infra.rke1 || cluster.nodedriver || stress) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke2k3s && !cluster.any && !sanity
+
 package rbac
 
 import (
@@ -57,8 +59,6 @@ func (ct *ClusterTemplateRKE1RBACTestSuite) SetupSuite() {
 	if ct.provisioningConfig.CNIs == nil {
 		ct.provisioningConfig.CNIs = []string{clustertemplates.CniCalico}
 	}
-
-	provisioning.DisableUpdateConfig(ct.client)
 }
 
 func (ct *ClusterTemplateRKE1RBACTestSuite) TestClusterTemplateEnforcementForStandardUser() {

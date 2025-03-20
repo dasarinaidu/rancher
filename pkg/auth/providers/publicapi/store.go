@@ -1,19 +1,18 @@
 package publicapi
 
 import (
-	"strings"
+	"fmt"
 
 	"github.com/rancher/norman/httperror"
 	"github.com/rancher/norman/objectclient"
 	"github.com/rancher/norman/store/empty"
 	"github.com/rancher/norman/types"
 	"github.com/rancher/rancher/pkg/auth/providers"
-	"github.com/rancher/rancher/pkg/auth/settings"
 	"github.com/rancher/rancher/pkg/auth/util"
 	v3 "github.com/rancher/rancher/pkg/generated/norman/management.cattle.io/v3"
 	"github.com/rancher/rancher/pkg/namespace"
 	"github.com/rancher/rancher/pkg/types/config"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -68,19 +67,6 @@ func (s *authProvidersStore) List(apiContext *types.APIContext, schema *types.Sc
 	return result, nil
 }
 
-func (s *authProvidersStore) Update(apiContext *types.APIContext, schema *types.Schema, data map[string]interface{}, id string) (map[string]interface{}, error) {
-	result, err := s.Update(apiContext, schema, data, id)
-	if err != nil {
-		return nil, err
-	}
-	if strings.EqualFold(settings.FirstLogin.Get(), "true") {
-		if err := settings.FirstLogin.Set("false"); err != nil {
-			return nil, err
-		}
-	}
-	return result, nil
-}
-
 func setAuthTokensStore(schema *types.Schema, apiContext *config.ScaledContext) {
 	schema.Store = &authTokensStore{
 		tokens: apiContext.Management.SamlTokens(""),
@@ -95,27 +81,17 @@ type authTokensStore struct {
 func (t *authTokensStore) ByID(apiContext *types.APIContext, schema *types.Schema, id string) (map[string]interface{}, error) {
 	token, err := t.tokens.GetNamespaced(namespace.GlobalNamespace, id, v1.GetOptions{})
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, httperror.NewAPIError(httperror.NotFound, fmt.Sprintf("token %s not found", id))
+		}
 		return nil, err
 	}
 	generated := transformToAuthToken(token)
 	return generated, err
 }
 
-func (t *authTokensStore) List(apiContext *types.APIContext, schema *types.Schema, opt *types.QueryOptions) ([]map[string]interface{}, error) {
-	tokens, err := t.tokens.ListNamespaced(namespace.GlobalNamespace, v1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	var result []map[string]interface{}
-	for _, token := range tokens.Items {
-		generated := transformToAuthToken(&token)
-		result = append(result, generated)
-	}
-	return result, nil
-}
-
 func (t *authTokensStore) Delete(apiContext *types.APIContext, schema *types.Schema, id string) (map[string]interface{}, error) {
-	if err := t.tokens.DeleteNamespaced(namespace.GlobalNamespace, id, &v1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+	if err := t.tokens.DeleteNamespaced(namespace.GlobalNamespace, id, &v1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return nil, err
 	}
 	return nil, nil

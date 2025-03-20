@@ -1,3 +1,5 @@
+//go:build (validation || infra.rke1 || cluster.nodedriver || stress) && !infra.any && !infra.aks && !infra.eks && !infra.gke && !infra.rke2k3s && !cluster.any && !sanity
+
 package clustertemplates
 
 import (
@@ -84,7 +86,6 @@ func (ct *ClusterTemplateExportTestSuite) SetupSuite() {
 	require.NoError(ct.T(), err)
 
 	provisioning.VerifyRKE1Cluster(ct.T(), standardClient, clusterConfig, ct.cluster)
-	provisioning.DisableUpdateConfig(ct.client)
 }
 
 func (ct *ClusterTemplateExportTestSuite) TestExportClusterTemplate() {

@@ -114,8 +114,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: install yq
-        shell: bash
-        run: sudo snap install yq
+        uses: ./.github/actions/install-yq
+        with:
+          arch: ${{ env.ARCH }}
+          use-sudo: true
       - name: Setup Environment Variables
         uses: ./.github/actions/setup-tag-env
       - id: env 
@@ -205,8 +207,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: install yq
-        shell: bash
-        run: sudo snap install yq
+        uses: ./.github/actions/install-yq
+        with:
+          arch: ${{ env.ARCH }}
+          use-sudo: true
       - id: env 
         name: Setup Dependencies Env Variables
         uses: ./.github/actions/setup-build-env
@@ -673,4 +677,30 @@ jobs:
           for artifact in "${artifacts[@]}"; do
             AWS_ACCESS_KEY_ID=${{ env.PRIME_ARTIFACTS_UPLOADER_ACCESS_KEY }} AWS_SECRET_ACCESS_KEY=${{ env.PRIME_ARTIFACTS_UPLOADER_SECRET_KEY }} aws s3 cp "./bin/$artifact" "s3://prime-artifacts/rancher/${{ env.TAG }}/$artifact"
           done
-
+      - name: Build artifacts index
+        env:
+          ARTIFACTS_DISTRIBUTION_ID: EUK3RJTBZG1QG
+        uses: ./.github/actions/build-artifacts-index
+  notify-release:
+    if: github.event_name == 'push' && contains(github.ref, 'tags/') # Only run on tags
+    runs-on: org-${{ github.repository_owner_id }}-amd64-k8s
+    container: registry.suse.com/bci/bci-base:latest
+    needs: [merge-server-manifest, merge-agent-manifest, merge-installer-manifest, create-images-files]
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Read App Secrets
+        uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/slack/webhook webhook_url | WEBHOOK_URL
+      - name: Send notification
+        env:
+          TAG: ${{ github.ref_name }}
+          STATUS: "Completed ✅"
+          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          curl -X POST ${{ env.WEBHOOK_URL }} -d '{"tag": "${{ env.TAG }}","status": "${{ env.STATUS }}","commit_url": "${{ env.COMMIT_URL }}","workflow_url": "${{ env.WORKFLOW_URL }}"}'
