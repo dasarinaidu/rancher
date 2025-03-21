@@ -65,10 +65,10 @@ rancher_ssc_cert = get_private_key('RANCHER_BYO_TLS_CERT', 'cert.pem')
 
 rbac_role_list = [
                   CLUSTER_OWNER,
-                  CLUSTER_MEMBER,
-                  PROJECT_OWNER,
-                  PROJECT_MEMBER,
-                  PROJECT_READ_ONLY
+                  # CLUSTER_MEMBER,
+                  # PROJECT_OWNER,
+                  # PROJECT_MEMBER,
+                  # PROJECT_READ_ONLY
                  ]
 
 
