@@ -377,6 +377,7 @@ class TestCertificate:
         2. Delete the certificate
         """
         token = rbac_get_user_token_by_role(role)
+        token = os.environ.get('ADMIN_TOKEN', "None")
         project = rbac_get_project()
         p_client = get_project_client_for_token(project, token)
         cert_name = random_test_name("cert-rbac")
