@@ -405,6 +405,7 @@ class TestCertificate:
         1. Create certificate for single namespace for all role
         2. Delete the certificate
         """
+        print("Role :"+role)
         token = rbac_get_user_token_by_role(role)
         project = rbac_get_project()
         ns = rbac_get_namespace()
