@@ -65,10 +65,10 @@ rancher_ssc_cert = get_private_key('RANCHER_BYO_TLS_CERT', 'cert.pem')
 
 rbac_role_list = [
                   CLUSTER_OWNER,
-                  # CLUSTER_MEMBER,
-                  # PROJECT_OWNER,
-                  # PROJECT_MEMBER,
-                  # PROJECT_READ_ONLY
+                  CLUSTER_MEMBER,
+                  PROJECT_OWNER,
+                  PROJECT_MEMBER,
+                  PROJECT_READ_ONLY
                  ]
 
 
@@ -405,7 +405,6 @@ class TestCertificate:
         1. Create certificate for single namespace for all role
         2. Delete the certificate
         """
-        print("Role :"+role)
         token = rbac_get_user_token_by_role(role)
         project = rbac_get_project()
         ns = rbac_get_namespace()
@@ -770,13 +769,13 @@ def create_project_client(request):
     namespace["cert_allns_ssc"] = certificate_allns_ssc
     namespace["node_id"] = node_id
 
-    def fin():
-        client = get_user_client()
-        client.delete(namespace["project"])
-        aws_services.upsert_route_53_record_cname(
-            route_entry_53_1, node_ip, action='DELETE', record_type='A',
-            record_ttl=60)
-        aws_services.upsert_route_53_record_cname(
-            route_entry_53_2, node_ip, action='DELETE', record_type='A',
-            record_ttl=60)
-    request.addfinalizer(fin)
+    # def fin():
+    #     client = get_user_client()
+    #     client.delete(namespace["project"])
+    #     aws_services.upsert_route_53_record_cname(
+    #         route_entry_53_1, node_ip, action='DELETE', record_type='A',
+    #         record_ttl=60)
+    #     aws_services.upsert_route_53_record_cname(
+    #         route_entry_53_2, node_ip, action='DELETE', record_type='A',
+    #         record_ttl=60)
+    # request.addfinalizer(fin)
